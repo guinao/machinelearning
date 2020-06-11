@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\Microsoft.ML.DataView\Microsoft.ML.DataView.csproj" />
+    <ProjectReference Include="..\src\Microsoft.ML.Data\Microsoft.ML.Data.csproj" />
+    <ProjectReference Include="..\src\Microsoft.ML.TimeSeries\Microsoft.ML.TimeSeries.csproj" />
+  </ItemGroup>
+
+</Project>
