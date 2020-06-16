@@ -661,6 +661,104 @@ namespace Microsoft.ML.Tests
             }
         }
 
+        [Theory, CombinatorialData]
+        public void TestSrCnnAnomalyDetectorWithSeasonalData(
+            [CombinatorialValues(SrCnnDeseasonalityMode.Stl, SrCnnDeseasonalityMode.Mean, SrCnnDeseasonalityMode.Median)] SrCnnDeseasonalityMode mode
+        )
+        {
+            var ml = new MLContext(1);
+            IDataView dataView;
+            var dataPath = GetDataPath("Timeseries", "period_no_anomaly.csv");
+
+            // Load data from file into the dataView
+            dataView = ml.Data.LoadFromTextFile<TimeSeriesDataDouble>(dataPath, hasHeader: true);
+
+            // Setup the detection arguments
+            string outputColumnName = nameof(SrCnnAnomalyDetection.Prediction);
+            string inputColumnName = nameof(TimeSeriesDataDouble.Value);
+
+            // Do batch anomaly detection
+            var options = new SrCnnEntireAnomalyDetectorOptions()
+            {
+                InputColumnName = inputColumnName,
+                OutputColumnName = outputColumnName,
+                Threshold = 0.3,
+                BatchSize = -1,
+                Sensitivity = 53.0,
+                DetectMode = SrCnnDetectMode.AnomalyAndMargin,
+                Period = 288,
+                DeseasonalityMode = mode
+            };
+
+            var outputDataView = ml.AnomalyDetection.DetectEntireAnomalyBySrCnn(dataView, options);
+
+                        // Getting the data of the newly created column as an IEnumerable of
+            // SrCnnAnomalyDetection.
+            var predictionColumn = ml.Data.CreateEnumerable<SrCnnAnomalyDetection>(
+                outputDataView, reuseRowObject: false);
+
+            foreach (var prediction in predictionColumn)
+            {
+                Assert.Equal(7, prediction.Prediction.Length);
+                Assert.Equal(0, prediction.Prediction[0]);
+            }
+        }
+
+        [Theory, CombinatorialData]
+        public void TestSrCnnAnomalyDetectorWithSeasonalAnomalyData(
+            [CombinatorialValues(SrCnnDeseasonalityMode.Stl, SrCnnDeseasonalityMode.Mean, SrCnnDeseasonalityMode.Median)] SrCnnDeseasonalityMode mode
+        )
+        {
+            var ml = new MLContext(1);
+            IDataView dataView;
+            var dataPath = GetDataPath("Timeseries", "period_anomaly.csv");
+
+            // Load data from file into the dataView
+            dataView = ml.Data.LoadFromTextFile<TimeSeriesDataDouble>(dataPath, hasHeader: true);
+
+            // Setup the detection arguments
+            string outputColumnName = nameof(SrCnnAnomalyDetection.Prediction);
+            string inputColumnName = nameof(TimeSeriesDataDouble.Value);
+
+            // Do batch anomaly detection
+            var options = new SrCnnEntireAnomalyDetectorOptions()
+            {
+                InputColumnName = inputColumnName,
+                OutputColumnName = outputColumnName,
+                Threshold = 0.23,
+                BatchSize = -1,
+                Sensitivity = 53.0,
+                DetectMode = SrCnnDetectMode.AnomalyAndMargin,
+                Period = 288,
+                DeseasonalityMode = mode
+            };
+            var outputDataView = ml.AnomalyDetection.DetectEntireAnomalyBySrCnn(dataView, options);
+
+            // Getting the data of the newly created column as an IEnumerable of
+            // SrCnnAnomalyDetection.
+            var predictionColumn = ml.Data.CreateEnumerable<SrCnnAnomalyDetection>(
+                outputDataView, reuseRowObject: false);
+
+            var anomalyStartIndex = 2988;
+            var anomalyEndIndex = 3095;
+
+            int k = 0;
+            foreach (var prediction in predictionColumn)
+            {
+                Assert.Equal(7, prediction.Prediction.Length);
+                if (anomalyStartIndex <= k && k <= anomalyEndIndex)
+                {
+                    Assert.Equal(1, prediction.Prediction[0]);
+                }
+                else
+                {
+                    Assert.Equal(0, prediction.Prediction[0]);
+                }
+
+                ++k;
+            }
+        }
+
         [Fact]
         public void RootCauseLocalization()
         {

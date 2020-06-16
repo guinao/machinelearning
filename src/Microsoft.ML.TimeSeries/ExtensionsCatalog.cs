@@ -176,7 +176,35 @@ namespace Microsoft.ML
         /// </example>
         public static IDataView DetectEntireAnomalyBySrCnn(this AnomalyDetectionCatalog catalog, IDataView input, string outputColumnName, string inputColumnName,
             double threshold = 0.3, int batchSize = 1024, double sensitivity = 99, SrCnnDetectMode detectMode = SrCnnDetectMode.AnomalyOnly)
-            => new SrCnnEntireAnomalyDetector(CatalogUtils.GetEnvironment(catalog), input, inputColumnName, outputColumnName, threshold, batchSize, sensitivity, detectMode);
+        {
+            var options = new SrCnnEntireAnomalyDetectorOptions()
+            {
+                InputColumnName = inputColumnName,
+                OutputColumnName = outputColumnName,
+                Threshold = threshold,
+                BatchSize = batchSize,
+                Sensitivity = sensitivity,
+                DetectMode = detectMode,
+            };
+
+            return DetectEntireAnomalyBySrCnn(catalog, input, options);
+        }
+
+        /// <summary>
+        /// Create <see cref="SrCnnEntireAnomalyDetector"/>, which detects timeseries anomalies for entire input using SRCNN algorithm.
+        /// </summary>
+        /// <param name="catalog">The AnomalyDetectionCatalog.</param>
+        /// <param name="input">Input DataView.</param>
+        /// <param name="options">Defines the settings of the load operation.</param>
+        /// <example>
+        /// <format type="text/markdown">
+        /// <![CDATA[
+        /// [!code-csharp[DetectEntireAnomalyBySrCnn](~/../docs/samples/docs/samples/Microsoft.ML.Samples/Dynamic/Transforms/TimeSeries/DetectEntireAnomalyBySrCnn.cs)]
+        /// ]]>
+        /// </format>
+        /// </example>
+        public static IDataView DetectEntireAnomalyBySrCnn(this AnomalyDetectionCatalog catalog, IDataView input, SrCnnEntireAnomalyDetectorOptions options = null)
+            => new SrCnnEntireAnomalyDetector(CatalogUtils.GetEnvironment(catalog), input, options);
 
         /// <summary>
         /// Create <see cref="RootCause"/>, which localizes root causes using decision tree algorithm.
