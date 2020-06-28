@@ -9,7 +9,6 @@ using Microsoft.ML.CommandLine;
 using Microsoft.ML.Data;
 using Microsoft.ML.Data.DataView;
 using Microsoft.ML.Runtime;
-using Microsoft.ML.TimeSeries.Deseasonality;
 using Microsoft.ML.Transforms.TimeSeries;
 
 namespace Microsoft.ML.TimeSeries
@@ -57,14 +56,6 @@ namespace Microsoft.ML.TimeSeries
     }
     public sealed class SrCnnEntireAnomalyDetectorOptions
     {
-        [Argument(ArgumentType.Required, HelpText = "The name of the input column.", ShortName = "input",
-            SortOrder = 1, Purpose = SpecialPurpose.ColumnName)]
-        public string InputColumnName;
-
-        [Argument(ArgumentType.Required, HelpText = "The name of the output column.", ShortName = "output",
-            SortOrder = 2)]
-        public string OutputColumnName;
-
         [Argument(ArgumentType.AtMostOnce, HelpText = "The threshold to determine anomaly, score larger than the threshold is considered as anomaly.",
             SortOrder = 3, ShortName = "thr")]
         public double Threshold = Defaults.Threshold;
@@ -140,13 +131,14 @@ namespace Microsoft.ML.TimeSeries
     /// </format>
     /// </remarks>
     /// <seealso cref="TimeSeriesCatalog.DetectEntireAnomalyBySrCnn(AnomalyDetectionCatalog, IDataView, string, string, double, int, double, SrCnnDetectMode)"/>
-    /// <seealso cref="TimeSeriesCatalog.DetectEntireAnomalyBySrCnn(AnomalyDetectionCatalog, IDataView, SrCnnEntireAnomalyDetectorOptions)"/>
+    /// <seealso cref="TimeSeriesCatalog.DetectEntireAnomalyBySrCnn(AnomalyDetectionCatalog, IDataView, string, string, SrCnnEntireAnomalyDetectorOptions)"/>
     internal sealed class SrCnnEntireAnomalyDetector : BatchDataViewMapperBase<double, SrCnnEntireAnomalyDetector.Batch>
     {
         private const int MinBatchSize = 12;
 
         private static readonly int[] _outputLengthArray = {3, 7, 4};
         private readonly SrCnnEntireAnomalyDetectorOptions _options;
+        private readonly string _inputColumnName;
         private readonly int _outputLength;
         private readonly Bindings _bindings;
 
@@ -191,23 +183,26 @@ namespace Microsoft.ML.TimeSeries
             }
         }
 
-        public SrCnnEntireAnomalyDetector(IHostEnvironment env, IDataView input, SrCnnEntireAnomalyDetectorOptions options)
+        public SrCnnEntireAnomalyDetector(IHostEnvironment env, IDataView input, string outputColumnName, string inputColumnName, SrCnnEntireAnomalyDetectorOptions options)
             : base(env, nameof(SrCnnEntireAnomalyDetector), input)
         {
+            Host.CheckValue(outputColumnName, nameof(outputColumnName));
+
+            Host.CheckValue(inputColumnName, nameof(inputColumnName));
+            _inputColumnName = inputColumnName;
+
             Host.CheckValue(options, nameof(options));
             CheckOptionArguments(options);
 
             _options = options;
             _outputLength = _outputLengthArray[(int)options.DetectMode];
 
-            _bindings = new Bindings(input.Schema, options.InputColumnName, options.OutputColumnName, new VectorDataViewType(NumberDataViewType.Double, _outputLength));
+            _bindings = new Bindings(input.Schema, inputColumnName, outputColumnName, new VectorDataViewType(NumberDataViewType.Double, _outputLength));
         }
 
         private void CheckOptionArguments(SrCnnEntireAnomalyDetectorOptions options)
         {
-            Host.CheckValue(options.InputColumnName, nameof(options.InputColumnName));
-
-            Host.CheckUserArg(options.Period >= 0, nameof(options.Period), "Must be integer equal or greater than 0.");
+            Host.CheckUserArg(options.Period >= 0, nameof(options.Period), "Must be an integer equal to or greater than 0.");
 
             Host.CheckUserArg(options.BatchSize == -1 || options.BatchSize >= MinBatchSize, nameof(options.BatchSize), "Must be -1 or no less than 12.");
             Host.CheckUserArg(options.BatchSize >= 4 * options.Period || options.BatchSize == -1 || options.Period == 0, nameof(options.BatchSize), "Must be at least four times the length of one period.");
@@ -230,7 +225,7 @@ namespace Microsoft.ML.TimeSeries
         {
             if (!SchemaBindings.AnyNewColumnsActive(x => active[x]))
                 return new Delegate[1];
-            return new[] { currentBatch.CreateGetter(input, _options.InputColumnName) };
+            return new[] { currentBatch.CreateGetter(input, _inputColumnName) };
         }
 
         protected override Batch CreateBatch(DataViewRowCursor input)
@@ -248,7 +243,7 @@ namespace Microsoft.ML.TimeSeries
 
         protected override ValueGetter<double> GetLookAheadGetter(DataViewRowCursor input)
         {
-            return input.GetGetter<double>(input.Schema[_options.InputColumnName]);
+            return input.GetGetter<double>(input.Schema[_inputColumnName]);
         }
 
         protected override Func<int, bool> GetSchemaBindingDependencies(Func<int, bool> predicate)
@@ -388,7 +383,7 @@ namespace Microsoft.ML.TimeSeries
             private readonly double _sensitivity;
             private readonly SrCnnDetectMode _detectMode;
             private readonly int _period;
-            private readonly DeseasonalityBase _deseasonalityFunction;
+            private readonly IDeseasonality _deseasonalityFunction;
 
             //used in all modes
             private readonly double[] _predictArray;
@@ -423,17 +418,18 @@ namespace Microsoft.ML.TimeSeries
                 _period = period;
                 _predictArray = new double[_lookaheadWindowSize + 1];
 
-                if (deseasonalityMode == SrCnnDeseasonalityMode.Stl)
+                switch (deseasonalityMode)
                 {
-                    _deseasonalityFunction = new StlDeseasonality();
-                }
-                else if (deseasonalityMode == SrCnnDeseasonalityMode.Mean)
-                {
-                    _deseasonalityFunction = new MeanDeseasonality();
-                }
-                else // if (deseasonalityMode == SrCnnDeseasonalityMode.Median)
-                {
-                    _deseasonalityFunction = new MedianDeseasonality();
+                    case SrCnnDeseasonalityMode.Stl:
+                        _deseasonalityFunction = new StlDeseasonality();
+                        break;
+                    case SrCnnDeseasonalityMode.Mean:
+                        _deseasonalityFunction = new MeanDeseasonality();
+                        break;
+                    default:
+                        Contracts.Assert(deseasonalityMode == SrCnnDeseasonalityMode.Median);
+                        _deseasonalityFunction = new MedianDeseasonality();
+                        break;
                 }
             }
 
@@ -508,7 +504,7 @@ namespace Microsoft.ML.TimeSeries
                 Array.Resize(ref _magLogList, length);
                 for (int i = 0; i < length; ++i)
                 {
-                    _magList[i] = Math.Sqrt((Math.Pow(_fftRe[i], 2) + Math.Pow(_fftIm[i], 2)));
+                    _magList[i] = Math.Sqrt(_fftRe[i] * _fftRe[i] + _fftIm[i] * _fftIm[i]);
                     if (_magList[i] > _eps)
                     {
                         _magLogList[i] = Math.Log(_magList[i]);
@@ -552,7 +548,7 @@ namespace Microsoft.ML.TimeSeries
                 Array.Resize(ref _ifftMagList, length);
                 for (int i = 0; i < length; ++i)
                 {
-                    _ifftMagList[i] = Math.Sqrt((Math.Pow(_ifftRe[i], 2) + Math.Pow(_ifftIm[i], 2)));
+                    _ifftMagList[i] = Math.Sqrt(_ifftRe[i] * _ifftRe[i] + _ifftIm[i] * _ifftIm[i]);
                 }
                 AverageFilter(_ifftMagList, Math.Min(_ifftMagList.Length, _judgementWindowSize));
 
@@ -660,10 +656,7 @@ namespace Microsoft.ML.TimeSeries
             private void GetMarginPeriod(double[] values, double[][] results, IReadOnlyList<double> residual, double sensitivity)
             {
                 //Step 8: Calculated Expected Value
-                for (int i = 0; i < values.Length; ++i)
-                {
-                    results[i][3] = values[i] - residual[i];
-                }
+                GetExpectedValuePeriod(values, results, residual);
 
                 //Step 9: Calculate Boundary Unit
                 CalculateBoundaryUnit(values, results.Select(x => x[0] > 0).ToArray());
@@ -832,11 +825,11 @@ namespace Microsoft.ML.TimeSeries
                 var n = values.Count;
                 double sumX = values.Sum(item => item.Item1);
                 double sumY = values.Sum(item => item.Item2);
-                double sumXX = values.Sum(item => Math.Pow(item.Item1, 2));
+                double sumXX = values.Sum(item => item.Item1 * item.Item1);
                 double sumXY = values.Sum(item => item.Item1 * item.Item2);
 
-                var a = ((double)n * sumXY - sumX * sumY) / ((double)n * sumXX - sumX * sumX);
-                var b = (sumXX * sumY - sumX * sumXY) / ((double)n * sumXX - sumX * sumX);
+                var a = ((n * sumXY) - (sumX * sumY)) / ((n * sumXX) - (sumX * sumX));
+                var b = ((sumXX * sumY) - (sumX * sumXY)) / ((n * sumXX) - (sumX * sumX));
 
                 return a * (double)idx + b;
             }

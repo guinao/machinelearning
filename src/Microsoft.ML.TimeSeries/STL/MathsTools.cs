@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
 using System.Collections.Generic;
 
 namespace Microsoft.ML.TimeSeries
@@ -6,11 +9,11 @@ namespace Microsoft.ML.TimeSeries
     internal class MathUtility
     {
         /// <summary>
-        /// use quick-sort like method to obtain the median value.
-        /// the complexity in expectation is O(n), which is faster than using quickSort.
+        /// Use quick-sort like method to obtain the median value.
+        /// The complexity in expectation is O(n), which is faster than using quickSort.
         /// </summary>
-        /// <param name="values">the input list of values. note that this list will be modified after calling this method</param>
-        /// <returns>returns the median value</returns>
+        /// <param name="values">The input list of values. Note that this list will be modified after calling this method</param>
+        /// <returns>Returns the median value</returns>
         public static double QuickMedian(List<double> values)
         {
             if (values == null || values.Count == 0)
@@ -21,8 +24,8 @@ namespace Microsoft.ML.TimeSeries
         }
 
         /// <summary>
-        /// use quick-sort like method to obtain the median value.
-        /// the complexity in expectation is O(n), which is faster than using quickSort.
+        /// Use quick-sort like method to obtain the median value.
+        /// The complexity in expectation is O(n), which is faster than using quickSort.
         /// </summary>
         /// <param name="values">The list of values</param>
         /// <param name="k">The k smallest value in the list</param>
@@ -73,8 +76,8 @@ namespace Microsoft.ML.TimeSeries
 
         public static int FindMedianIndex(IReadOnlyList<double> values, int start, int end)
         {
-            // use the middle value among first/middle/end as the guard value, to make sure the average performance good.
-            // according to unit test, this fix will improve the average performance 10%. and works normally when input list is ordered.
+            // Use the middle value among first/middle/end as the guard value, to make sure the average performance good.
+            // According to unit test, this fix will improve the average performance 10%. and works normally when input list is ordered.
             double first = values[start];
             double last = values[end];
             int midIndex = (start + end) / 2;

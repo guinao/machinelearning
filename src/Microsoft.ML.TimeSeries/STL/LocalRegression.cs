@@ -1,34 +1,38 @@
-﻿using System;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
+using System;
 using System.Collections.Generic;
 using Microsoft.ML.Internal.CpuMath.Core;
 
 namespace Microsoft.ML.TimeSeries
 {
     /// <summary>
-    /// this class is used to maintain the neighbors of a given particular point.
+    /// This class is used to maintain the neighbors of a given particular point.
     /// </summary>
     internal class LocalRegression
     {
         private const double NumericalThreshold = 1.0e-10;
         private readonly IReadOnlyList<double> _x;
         private readonly IReadOnlyList<double> _y;
-        private int _length;
+        private readonly int _length;
 
         /// <summary>
-        /// the model is learned by several iterations of local weighted regression.
+        /// The model is learned by several iterations of local weighted regression.
         /// </summary>
-        private PolynomialModel _model;
+        private AbstractPolynomialModel _model;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LocalRegression"/> class.
-        /// construct the neighborhood information of a given point. note that the input series will not be copies again, due to
+        /// Construct the neighborhood information of a given point. note that the input series will not be copies again, due to
         /// memory usage concern.
         /// </summary>
-        /// <param name="x">the complete values of x-axis</param>
-        /// <param name="y">the complete values of y-axis</param>
-        /// <param name="selfIndex">the index of the current point</param>
-        /// <param name="r">number of neighbors, usually should be less then n. if it is equal/larger than n, the weight has slight change.</param>
-        /// <param name="isTemporal">if the regression is considered to take temporal information into account. in general, this is true if we are regressing a time series, and false if we are regressing scatter plot data</param>
+        /// <param name="x">The complete values of x-axis</param>
+        /// <param name="y">The complete values of y-axis</param>
+        /// <param name="selfIndex">The index of the current point</param>
+        /// <param name="r">Number of neighbors, usually should be less then n. if it is equal/larger than n, the weight has slight change.</param>
+        /// <param name="isTemporal">If the regression is considered to take temporal information into account. In general, this is true if we are regressing a time series, and false if we are regressing scatter plot data</param>
         public LocalRegression(IReadOnlyList<double> x, IReadOnlyList<double> y, int selfIndex, int r, bool isTemporal = true)
         {
             Contracts.CheckValue(x, nameof(x));
@@ -44,15 +48,11 @@ namespace Microsoft.ML.TimeSeries
             _length = _x.Count;
             SelfIndex = selfIndex;
 
-            NeighborsX = new List<double>();
-            NeighborsY = new List<double>();
-            Weights = new List<double>();
-
             int startIndex = selfIndex;
             int endIndex = selfIndex;
             double selfValue = _x[SelfIndex];
 
-            // the normal case, the farthest neighbor is contained in the list.
+            // The farthest neighbor is contained in the list. This is the normal case.
             if (r < _length)
             {
                 int left = r;
@@ -88,6 +88,11 @@ namespace Microsoft.ML.TimeSeries
                 StartIndex = startIndex;
                 EndIndex = endIndex;
 
+                var neighborsCount = EndIndex - StartIndex + 1;
+                NeighborsX = new double[neighborsCount];
+                NeighborsY = new double[neighborsCount];
+                Weights = new double[neighborsCount];
+
                 double leftRange = selfValue - _x[startIndex];
                 double rightRange = _x[endIndex] - selfValue;
                 double range = Math.Max(leftRange, rightRange);
@@ -96,20 +101,20 @@ namespace Microsoft.ML.TimeSeries
                 {
                     for (int i = StartIndex; i <= EndIndex; i++)
                     {
-                        NeighborsX.Add(_x[i]);
-                        NeighborsY.Add(_y[i]);
-                        Weights.Add(WeightMethod.Tricube((_x[i] - selfValue) / range));
+                        NeighborsX[i - StartIndex] = _x[i];
+                        NeighborsY[i - StartIndex] = _y[i];
+                        Weights[i - StartIndex] = WeightMethod.Tricube((_x[i] - selfValue) / range);
                     }
                 }
                 else
                 {
                     for (int i = StartIndex; i <= EndIndex; i++)
                     {
-                        NeighborsX.Add(_x[i]);
-                        NeighborsY.Add(_y[i]);
+                        NeighborsX[i - StartIndex] = _x[i];
+                        NeighborsY[i - StartIndex] = _y[i];
 
                         // since we do not consider the local/temporal information, all the neighbors share same weight for further weighted regression
-                        Weights.Add(1.0);
+                        Weights[i - StartIndex] = 1.0;
                     }
                 }
             }
@@ -123,6 +128,11 @@ namespace Microsoft.ML.TimeSeries
                 double rightRange = _x[EndIndex] - selfValue;
                 double range = Math.Max(leftRange, rightRange);
 
+                var neighborsCount = EndIndex - StartIndex + 1;
+                NeighborsX = new double[neighborsCount];
+                NeighborsY = new double[neighborsCount];
+                Weights = new double[neighborsCount];
+
                 // this is the slight modification of the weighting calculation
                 range = range * r / (_length - 1);
 
@@ -130,52 +140,52 @@ namespace Microsoft.ML.TimeSeries
                 {
                     for (int i = StartIndex; i <= EndIndex; i++)
                     {
-                        NeighborsX.Add(_x[i]);
-                        NeighborsY.Add(_y[i]);
-                        Weights.Add(WeightMethod.Tricube((_x[i] - selfValue) / range));
+                        NeighborsX[i - StartIndex] = _x[i];
+                        NeighborsY[i - StartIndex] = _y[i];
+                        Weights[i - StartIndex] = WeightMethod.Tricube((_x[i] - selfValue) / range);
                     }
                 }
                 else
                 {
                     for (int i = StartIndex; i <= EndIndex; i++)
                     {
-                        NeighborsX.Add(_x[i]);
-                        NeighborsY.Add(_y[i]);
+                        NeighborsX[i - StartIndex] = _x[i];
+                        NeighborsY[i - StartIndex] = _y[i];
 
                         // since we do not consider the local/temporal information, all the neighbors share same weight for further weighted regression
-                        Weights.Add(1.0);
+                        Weights[i - StartIndex] = 1.0;
                     }
                 }
             }
         }
 
         /// <summary>
-        /// the values of the y-axis of the neighbors (include the self point)
+        /// The values of the y-axis of the neighbors (include the self point)
         /// </summary>
-        public List<double> NeighborsY { get; private set; }
+        public double[] NeighborsY { get; private set; }
 
         /// <summary>
-        /// the values of the x-axis of the neighbors (include the self point)
+        /// The values of the x-axis of the neighbors (include the self point)
         /// </summary>
-        public List<double> NeighborsX { get; private set; }
+        public double[] NeighborsX { get; private set; }
 
         /// <summary>
-        /// the weights for each neighbor. this is used for weighted least squares.
+        /// The weights for each neighbor. This is used for weighted least squares.
         /// </summary>
-        public List<double> Weights { get; private set; }
+        public double[] Weights { get; private set; }
 
         /// <summary>
-        /// the start index of the neighbors (inclusive)
+        /// The start index of the neighbors (inclusive)
         /// </summary>
         public int StartIndex { get; private set; }
 
         /// <summary>
-        /// the end index of the neighbors (inclusive)
+        /// The end index of the neighbors (inclusive)
         /// </summary>
         public int EndIndex { get; private set; }
 
         /// <summary>
-        /// the index of the self point. the index is on the complete series, not only on the neighbor series.
+        /// The index of the self point. The index is on the complete series, not only on the neighbor series.
         /// </summary>
         public int SelfIndex { get; private set; }
 
@@ -186,9 +196,9 @@ namespace Microsoft.ML.TimeSeries
                 _model = Regression();
 
                 // calculate the errors
-                var errors = new double[NeighborsX.Count];
-                var absErrors = new double[NeighborsX.Count];
-                for (int i = 0; i < NeighborsX.Count; i++)
+                var errors = new double[NeighborsX.Length];
+                var absErrors = new double[NeighborsX.Length];
+                for (int i = 0; i < NeighborsX.Length; i++)
                 {
                     double error = NeighborsY[i] - _model.Y(NeighborsX[i]);
                     errors[i] = error;
@@ -209,7 +219,7 @@ namespace Microsoft.ML.TimeSeries
                 }
 
                 // update new weights.
-                for (int i = 0; i < Weights.Count; i++)
+                for (int i = 0; i < Weights.Length; i++)
                 {
                     Weights[i] *= deltas[i];
                 }
@@ -217,7 +227,7 @@ namespace Microsoft.ML.TimeSeries
         }
 
         /// <summary>
-        /// get the best estimated y for the current value.
+        /// Get the best estimated y for the current value.
         /// </summary>
         public double Y()
         {
@@ -229,9 +239,9 @@ namespace Microsoft.ML.TimeSeries
         }
 
         /// <summary>
-        /// get the best estimated y for any given x-value, event not one of the observed point
+        /// Get the best estimated y for any given x-value, event not one of the observed point
         /// </summary>
-        /// <param name="xValue">any given x value</param>
+        /// <param name="xValue">Any given x value</param>
         public double Y(double xValue)
         {
             if (_model == null)
@@ -241,7 +251,7 @@ namespace Microsoft.ML.TimeSeries
             return _model.Y(xValue);
         }
 
-        private PolynomialModel Regression()
+        private AbstractPolynomialModel Regression()
         {
             LeastSquares ls = new LeastSquares(NeighborsX, NeighborsY);
             return ls.RegressionDegreeOneWeighted(Weights);

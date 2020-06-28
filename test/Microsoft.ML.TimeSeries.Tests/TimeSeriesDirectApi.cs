@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Microsoft.ML.Data;
 using Microsoft.ML.TestFramework;
 using Microsoft.ML.TimeSeries;
@@ -527,10 +528,10 @@ namespace Microsoft.ML.Tests
         {
             var ml = new MLContext(1);
             IDataView dataView;
-            if(loadDataFromFile)
+            if (loadDataFromFile)
             {
                 var dataPath = GetDataPath(Path.Combine("Timeseries", "anomaly_detection.csv"));
-                
+
                 // Load data from file into the dataView
                 dataView = ml.Data.LoadFromTextFile(dataPath, new[] {
                     new TextLoader.Column("Value", DataKind.Single, 0),
@@ -577,9 +578,9 @@ namespace Microsoft.ML.Tests
 
         [Theory, CombinatorialData]
         public void TestSrCnnBatchAnomalyDetector(
-            [CombinatorialValues(SrCnnDetectMode.AnomalyOnly, SrCnnDetectMode.AnomalyAndExpectedValue, SrCnnDetectMode.AnomalyAndMargin)]SrCnnDetectMode mode,
-            [CombinatorialValues(true, false)]bool loadDataFromFile,
-            [CombinatorialValues(-1, 24, 26, 512)]int batchSize)
+            [CombinatorialValues(SrCnnDetectMode.AnomalyOnly, SrCnnDetectMode.AnomalyAndExpectedValue, SrCnnDetectMode.AnomalyAndMargin)] SrCnnDetectMode mode,
+            [CombinatorialValues(true, false)] bool loadDataFromFile,
+            [CombinatorialValues(-1, 24, 26, 512)] int batchSize)
         {
             var ml = new MLContext(1);
             IDataView dataView;
@@ -596,7 +597,7 @@ namespace Microsoft.ML.Tests
                 var data = new List<TimeSeriesDataDouble>();
                 for (int index = 0; index < 20; index++)
                 {
-                    data.Add(new TimeSeriesDataDouble { Value = 5 } );
+                    data.Add(new TimeSeriesDataDouble { Value = 5 });
                 }
                 data.Add(new TimeSeriesDataDouble { Value = 10 });
                 for (int index = 0; index < 5; index++)
@@ -662,8 +663,7 @@ namespace Microsoft.ML.Tests
 
         [Theory, CombinatorialData]
         public void TestSrCnnAnomalyDetectorWithSeasonalData(
-            [CombinatorialValues(SrCnnDeseasonalityMode.Stl, SrCnnDeseasonalityMode.Mean, SrCnnDeseasonalityMode.Median)] SrCnnDeseasonalityMode mode
-        )
+            [CombinatorialValues(SrCnnDeseasonalityMode.Stl, SrCnnDeseasonalityMode.Mean, SrCnnDeseasonalityMode.Median)] SrCnnDeseasonalityMode mode)
         {
             var ml = new MLContext(1);
             IDataView dataView;
@@ -679,8 +679,6 @@ namespace Microsoft.ML.Tests
             // Do batch anomaly detection
             var options = new SrCnnEntireAnomalyDetectorOptions()
             {
-                InputColumnName = inputColumnName,
-                OutputColumnName = outputColumnName,
                 Threshold = 0.3,
                 BatchSize = -1,
                 Sensitivity = 53.0,
@@ -689,7 +687,7 @@ namespace Microsoft.ML.Tests
                 DeseasonalityMode = mode
             };
 
-            var outputDataView = ml.AnomalyDetection.DetectEntireAnomalyBySrCnn(dataView, options);
+            var outputDataView = ml.AnomalyDetection.DetectEntireAnomalyBySrCnn(dataView, outputColumnName, inputColumnName, options);
 
             // Getting the data of the newly created column as an IEnumerable of SrCnnAnomalyDetection.
             var predictionColumn = ml.Data.CreateEnumerable<SrCnnAnomalyDetection>(
@@ -721,8 +719,6 @@ namespace Microsoft.ML.Tests
             // Do batch anomaly detection
             var options = new SrCnnEntireAnomalyDetectorOptions()
             {
-                InputColumnName = inputColumnName,
-                OutputColumnName = outputColumnName,
                 Threshold = 0.23,
                 BatchSize = -1,
                 Sensitivity = 53.0,
@@ -731,7 +727,7 @@ namespace Microsoft.ML.Tests
                 DeseasonalityMode = mode
             };
 
-            var outputDataView = ml.AnomalyDetection.DetectEntireAnomalyBySrCnn(dataView, options);
+            var outputDataView = ml.AnomalyDetection.DetectEntireAnomalyBySrCnn(dataView, outputColumnName, inputColumnName, options);
 
             // Getting the data of the newly created column as an IEnumerable of SrCnnAnomalyDetection.
             var predictionColumn = ml.Data.CreateEnumerable<SrCnnAnomalyDetection>(
@@ -782,6 +778,29 @@ namespace Microsoft.ML.Tests
             {
                 Assert.Equal(expectedDim[pair.Key], pair.Value);
             }
+        }
+
+        [Theory]
+        [InlineData(-1, 6)]
+        [InlineData(60, 6)]
+        [InlineData(20, -1)]
+        public void TestDetectSeasonality(int seasonalityWindowSize, int expectedPeriod)
+        {
+            // Create a detect seasonality input: y = sin(2 * Pi + x)
+            var input = Enumerable.Range(0, 100).Select(x =>
+                new TimeSeriesDataDouble()
+                {
+                    Value = Math.Sin(2 * Math.PI + x),
+                });
+            foreach (var data in input)
+                Console.WriteLine(data.Value);
+            var mlContext = new MLContext();
+
+            var dataView = mlContext.Data.LoadFromEnumerable(input);
+            SeasonalityDetector seasonalityDetector = new SeasonalityDetector();
+
+            int period = mlContext.AnomalyDetection.DetectSeasonality(dataView, nameof(TimeSeriesDataDouble.Value), seasonalityWindowSize);
+            Assert.Equal(expectedPeriod, period);
         }
 
         private static List<TimeSeriesPoint> GetRootCauseLocalizationPoints()

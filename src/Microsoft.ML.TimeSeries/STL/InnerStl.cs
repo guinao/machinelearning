@@ -1,4 +1,8 @@
-﻿using System;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
+using System;
 using System.Collections.Generic;
 using Microsoft.ML.Runtime;
 
@@ -11,7 +15,7 @@ namespace Microsoft.ML.TimeSeries
         private double[] _trendComponent;
         private double[] _residual;
 
-        // arrays for intermediate results
+        // Arrays for intermediate results
         private List<double>[] _cycleSubSeries;
         private List<double>[] _smoothedSubseries;
 
@@ -22,25 +26,26 @@ namespace Microsoft.ML.TimeSeries
         private double[] _deseasonSeries;
 
         /// <summary>
-        /// the smoothing parameter for the seasonal component.
-        /// should be odd, and at least 7.
+        /// The smoothing parameter for the seasonal component.
+        /// This parameter should be odd, and at least 7.
         /// </summary>
         private const int Ns = 9;
 
         /// <summary>
-        /// the number of passes through the inner loop. /ref this value is set to 2, which works for many cases
+        /// The number of passes through the inner loop. This parameter is set to 2, which works for many cases.
         /// </summary>
         private const int Ni = 2;
 
         /// <summary>
-        /// the number of robustness iterations of the outer loop
+        /// The number of robustness iterations of the outer loop. This parameter is not used in this implementation as we simplify the implementation.
+        /// Keep this parameter here as it is listed as one of the six parameters described in the original paper.
         /// </summary>
         private const int No = 10;
 
         /// <summary>
-        /// the smoothing parameter for the low-pass filter.
-        /// /ref: should be the least odd integer greater than or equal to np.
-        /// it will preventing the trend and seasonal components from competing for the same variation in the data.
+        /// The smoothing parameter for the low-pass filter.
+        /// This parameter should be the least odd integer greater than or equal to np.
+        /// It will preventing the trend and seasonal components from competing for the same variation in the data.
         /// </summary>
         private int Nl(int np)
         {
@@ -50,9 +55,9 @@ namespace Microsoft.ML.TimeSeries
         }
 
         /// <summary>
-        /// the smoothing parameter for the trend component.
-        /// /ref: in order to avoid the trend ans seasonal components compete for variation in the data, the nt should be chosen
-        /// s.t., satisty the following inequality.
+        /// The smoothing parameter for the trend component.
+        /// In order to avoid the trend ans seasonal components compete for variation in the data, the nt should be chosen
+        /// S.t., satisty the following inequality.
         /// </summary>
         private int Nt(int np)
         {
@@ -65,18 +70,18 @@ namespace Microsoft.ML.TimeSeries
 
         /// <summary>
         /// Initializes a new instance of the <see cref="InnerStl"/> class.
-        /// for a time series, only with y values. assume the x-values are 0, 1, 2, ...
-        /// since this method supports decompose seasonal signal, which requires the equal-space of the input x-axis values.
-        /// otherwise, the smoothing on seasonal component will be very complicated.
+        /// For a time series, only with y values. assume the x-values are 0, 1, 2, ...
+        /// Since this method supports decompose seasonal signal, which requires the equal-space of the input x-axis values.
+        /// Otherwise, the smoothing on seasonal component will be very complicated.
         /// </summary>
-        /// <param name="isTemporal">if the regression is considered to take temporal information into account. in general, this is true if we are regressing a time series, and false if we are regressing scatter plot data</param>
+        /// <param name="isTemporal">If the regression is considered to take temporal information into account. In general, this is true if we are regressing a time series, and false if we are regressing scatter plot data</param>
         public InnerStl(bool isTemporal)
         {
             _isTemporal = isTemporal;
         }
 
         /// <summary>
-        /// the seasonal component
+        /// The seasonal component
         /// </summary>
         public IReadOnlyList<double> SeasonalComponent
         {
@@ -84,7 +89,7 @@ namespace Microsoft.ML.TimeSeries
         }
 
         /// <summary>
-        /// the trend component
+        /// The trend component
         /// </summary>
         public IReadOnlyList<double> TrendComponent
         {
@@ -92,7 +97,7 @@ namespace Microsoft.ML.TimeSeries
         }
 
         /// <summary>
-        /// the left component after seasonal and trend are eliminated.
+        /// The left component after seasonal and trend are eliminated.
         /// </summary>
         public IReadOnlyList<double> Residual
         {
@@ -100,10 +105,10 @@ namespace Microsoft.ML.TimeSeries
         }
 
         /// <summary>
-        /// the core for the robust trend-seasonal decomposition. see the ref: http://www.wessa.net/download/stl.pdf,
-        /// see section 2 and 3. especially section 2.
+        /// The core for the robust trend-seasonal decomposition. See the ref: http://www.wessa.net/download/stl.pdf,
+        /// See section 2 and 3. especially section 2.
         /// </summary>
-        /// <returns>return true if the process goes successfully. otherwise, return false.</returns>
+        /// <returns>Return true if the process goes successfully. Otherwise, return false.</returns>
         public bool Decomposition(IReadOnlyList<double> yValues, int np)
         {
             Contracts.CheckValue(yValues, nameof(yValues));
@@ -237,7 +242,7 @@ namespace Microsoft.ML.TimeSeries
 
         private void SmoothedCycleSubseriesDetrending(double[] c, FastLoess lowPass, double[] s)
         {
-            for (int i = 0; i < c.Length; i++)
+            for (int i = 0; i < s.Length; i++)
             {
                 s[i] = c[i] - lowPass.Y[i];
             }
@@ -263,8 +268,8 @@ namespace Microsoft.ML.TimeSeries
         }
 
         /// <summary>
-        /// this class provides the virtual x values for multi object usage.
-        /// the cache mechanism is used for performance consideration.
+        /// This class provides the virtual x values for multi object usage.
+        /// The cache mechanism is used for performance consideration.
         /// </summary>
         internal class VirtualXValuesProvider
         {
@@ -276,10 +281,10 @@ namespace Microsoft.ML.TimeSeries
             }
 
             /// <summary>
-            /// get a list of virtual x-axis values. the values are from 0 to length - 1.
+            /// Get a list of virtual x-axis values. the values are from 0 to length - 1.
             /// </summary>
-            /// <param name="length">specify the length you want to create the x values.</param>
-            /// <returns>if this is cached, return directly. otherwise, create a new list and return</returns>
+            /// <param name="length">Specify the length you want to create the x values.</param>
+            /// <returns>If the input is cached, return the cached output directly. Otherwise, create a new list and return</returns>
             internal static List<double> GetXValues(int length)
             {
                 lock (_xValuesPool)

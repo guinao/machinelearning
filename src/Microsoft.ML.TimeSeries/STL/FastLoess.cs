@@ -1,18 +1,27 @@
-﻿using System.Collections.Generic;
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
+using System.Collections.Generic;
 using Microsoft.ML.Runtime;
 
 namespace Microsoft.ML.TimeSeries
 {
     /// <summary>
-    /// this is the fast version of Loess. there are several alternatives to improve the performance. this one is an approximation approach.
-    /// the smoothing is conducted on a sample set, and then the values on the left points are assigned directly.
+    /// This is the fast version of Loess. There are several alternatives to improve the performance. This one is an approximation approach.
+    /// The smoothing is conducted on a sample set, and then the values on the left points are assigned directly.
     /// </summary>
     internal class FastLoess
     {
         /// <summary>
-        /// this class is a sampling based method, so here specifies the sample size.
+        /// This class is a sampling based method, so here specifies the sample size.
         /// </summary>
         private const int _sampleSize = 100;
+
+        /// <summary>
+        /// The minimum length of a valid time series. A time series with length equals 2 is so trivial and meaningless less than 2.
+        /// </summary>
+        public const int MinTimeSeriesLength = 3;
 
         private readonly IReadOnlyList<double> _x;
         private readonly IReadOnlyList<double> _y;
@@ -22,37 +31,35 @@ namespace Microsoft.ML.TimeSeries
 
         /// <summary>
         /// Initializes a new instance of the <see cref="FastLoess"/> class.
-        /// the fast version of the Loess method. when the time series is too long, the sampling will be conducted first
-        /// to improve the performance.
+        /// The fast version of the Loess method. when the time series is too long, the sampling will be conducted first to improve the performance.
         /// </summary>
-        /// <param name="xValues">the input x-axis values</param>
-        /// <param name="yValues">the input y-axis values</param>
-        /// <param name="isTemporal">if the regression is considered to take temporal information into account. in general, this is true if we are regressing a time series, and false if we are regressing scatter plot data</param>
-        /// <param name="r">this method will provide default smoothing ratio if user did not specify</param>
+        /// <param name="xValues">The input x-axis values</param>
+        /// <param name="yValues">The input y-axis values</param>
+        /// <param name="isTemporal">If the regression is considered to take temporal information into account. In general, this is true if we are regressing a time series, and false if we are regressing scatter plot data</param>
+        /// <param name="r">This method will provide default smoothing ratio if user did not specify</param>
         public FastLoess(IReadOnlyList<double> xValues, IReadOnlyList<double> yValues, bool isTemporal = true, int r = -1)
         {
             Contracts.CheckValue(xValues, nameof(xValues));
             Contracts.CheckValue(yValues, nameof(yValues));
             Y = new List<double>();
 
-            if (yValues.Count < LoessBasicParameters.MinTimeSeriesLength)
+            if (yValues.Count < MinTimeSeriesLength)
                 throw Contracts.Except("input data structure cannot be 0-length: lowess");
 
             _x = xValues;
             _y = yValues;
             _length = _y.Count;
 
-            // the sampling is not neccessary
             if (_length <= FastLoess._sampleSize)
             {
                 if (r == -1)
                     _smoother = new Loess(_x, _y, isTemporal);
                 else
-                    _smoother = new Loess(_x, _y, r, isTemporal);
+                    _smoother = new Loess(_x, _y, isTemporal, r);
             }
             else
             {
-                // conduct sampling based strategy, to boost the performance.
+                // Conduct sampling based strategy, to boost the performance.
                 double step = _length * 1.0 / FastLoess._sampleSize;
                 var sampleX = new double[FastLoess._sampleSize];
                 var sampleY = new double[FastLoess._sampleSize];
@@ -65,17 +72,17 @@ namespace Microsoft.ML.TimeSeries
                 if (r == -1)
                     _smoother = new Loess(sampleX, sampleY, isTemporal);
                 else
-                    _smoother = new Loess(sampleX, sampleY, r, isTemporal);
+                    _smoother = new Loess(sampleX, sampleY, isTemporal, r);
             }
         }
 
         /// <summary>
-        /// the estimated y values. this is the very cool smoothing method.
+        /// The estimated y values.
         /// </summary>
         public List<double> Y { get; }
 
         /// <summary>
-        /// assign the smoothing values to all the data points, not only on the sample size.
+        /// Assign the smoothing values to all the data points, not only on the sample size.
         /// </summary>
         public void Estimate()
         {
@@ -87,7 +94,7 @@ namespace Microsoft.ML.TimeSeries
         }
 
         /// <summary>
-        /// estimate any y value by given any x value, event the x value is not one of the input points.
+        /// Estimate a y value by giving an x value, even if the x value is not one of the input points.
         /// </summary>
         public double EstimateY(double xValue)
         {
