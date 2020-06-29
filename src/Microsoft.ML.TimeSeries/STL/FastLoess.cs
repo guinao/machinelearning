@@ -44,7 +44,7 @@ namespace Microsoft.ML.TimeSeries
             Y = new List<double>();
 
             if (yValues.Count < MinTimeSeriesLength)
-                throw Contracts.Except("input data structure cannot be 0-length: lowess");
+                throw Contracts.Except(string.Format("input time series length for FastLoess is below {0}", MinTimeSeriesLength));
 
             _x = xValues;
             _y = yValues;
